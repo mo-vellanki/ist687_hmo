@@ -18,3 +18,22 @@ hmoData <- read_csv('https://intro-datascience.s3.us-east-2.amazonaws.com/HMO_da
 ```
 
 Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+```{r Removing NA Values}
+hmoData <- hmoData[!(is.na(hmoData$bmi) | is.na(hmoData$hypertension)),]
+```
+
+```{r Transforming Categorical Data}
+hmoData$smoker <- as.factor(hmoData$smoker)
+hmoData$location_type <- as.factor(hmoData$location_type)
+hmoData$education_level <- as.factor(hmoData$education_level)
+hmoData$yearly_physical <- as.factor(hmoData$yearly_physical)
+hmoData$exercise <- as.factor(hmoData$exercise)
+hmoData$married <- as.factor(hmoData$married)
+hmoData$gender <- as.factor(hmoData$gender)
+```
+
+```{r Regression Model}
+lmOut <- lm(data = HMO_df2, cost ~ .)
+summary(lmOut)
+```
+
