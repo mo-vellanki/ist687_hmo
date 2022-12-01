@@ -17,23 +17,265 @@ library(tidyverse)
 hmoData <- read_csv('https://intro-datascience.s3.us-east-2.amazonaws.com/HMO_data.csv')
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
-```{r Removing NA Values}
-hmoData <- hmoData[!(is.na(hmoData$bmi) | is.na(hmoData$hypertension)),]
+```{r}
+sum(is.na(hmoData)) # 158 null values
 ```
 
-```{r Transforming Categorical Data}
+```{r}
+# Checking each columns for number of nulls
+colSums(is.na(hmoData))
+# we can see that we have 78 nulls in bmi and 80 nulls in hypertension.
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+#Creating a histogram for the age
+hist(hmoData$age, breaks= 20)
+#we can observe that the hmoData is non-uniform as there are lot of people with age below 20.
+```
+
+```{r}
+# Checking for outliers for age
+boxplot(hmoData$age) # not clear outliers
+```
+
+```{r}
+# checking for a corelation b/w age and cost
+hmoData %>% ggplot() + 
+  aes(x=age, y=cost) + 
+  geom_point() +
+  geom_smooth(method="lm", se=FALSE) + 
+  ggtitle("Age vs Cost")
+```
+
+
+
+```{r}
+# Since we know that we have many missing values in BMI, lets clean them.
+hmoData$bmi <- na_interpolation(hmoData$bmi)
+sum(is.na(hmoData$bmi))
+# now there are no missing values in BMI
+```
+
+```{r}
+hist(hmoData$bmi, breaks= 20)
+```
+
+```{r}
+# checking for outliers
+boxplot(hmoData$bmi) # not clear outliers
+```
+
+```{r}
+quartiles <- quantile(hmoData$bmi, probs=c(.25, .75), na.rm = FALSE)
+IQR <- IQR(hmoData$bmi)
+Lower <- quartiles[1] - 1.5*IQR
+Upper <- quartiles[2] + 1.5*IQR 
+```
+
+```{r}
+hmoData <- subset(hmoData, hmoData$bmi > Lower & hmoData$bmi <= Upper-1)
+```
+
+```{r}
+boxplot(hmoData$bmi) # not more outliers
+```
+
+```{r}
+# checking for a corelation b/w bmi and cost
+hmoData %>% ggplot() + 
+  aes(x=bmi, y=cost) + 
+  geom_point() +
+  geom_smooth(method="lm", se=FALSE) + 
+  ggtitle("BMI vs Cost")
+```
+
+```{r}
+hist(hmoData$children, breaks=5)
+```
+
+```{r}
+boxplot(hmoData$children) # not outliers
+```
+
+```{r}
+# checking for a corelation b/w children and cost
+hmoData %>% ggplot() + 
+  aes(x=children, y=cost) + 
+  geom_point() +
+  geom_smooth(method="lm", se=FALSE) + 
+  ggtitle("children vs Cost")
+```
+
+```{r}
+# The following columns can be converted into categorical hmoData.
+unique(hmoData$location)
+```
+
+```{r}
+summary(hmoData$cost[hmoData$smoker =="yes"])
+summary(hmoData$cost[hmoData$smoker =="no"])
+```
+
+```{r}
+summary(hmoData$cost[hmoData$location_type =="Urban"])
+summary(hmoData$cost[hmoData$location_type =="Country"])
+```
+
+```{r}
+summary(hmoData$cost[hmoData$yearly_physical =="No"])
+summary(hmoData$cost[hmoData$yearly_physical =="Yes"])
+```
+
+```{r}
+summary(hmoData$cost[hmoData$exercise =="Active"])
+summary(hmoData$cost[hmoData$exercise =="Not-Active"])
+```
+
+```{r}
+summary(hmoData$cost[hmoData$married =="Married"])
+summary(hmoData$cost[hmoData$married =="Not_Married"])
+```
+
+```{r}
+summary(hmoData$cost[hmoData$gender =="male"])
+summary(hmoData$cost[hmoData$gender =="female"])
+```
+
+```{r}
+hmoData$hypertension <- na_interpolation(hmoData$hypertension)
+```
+
+```{r}
+sum(is.na(hmoData$hypertension))
+```
+
+```{r}
+hist(hmoData$hypertension, breaks= 20)
+```
+
+```{r}
+sum(hmoData$hypertension > 0 & hmoData$hypertension < 1)
+```
+
+```{r}
+hmoData$hypertension <- as.integer(hmoData$hypertension)
+hist(hmoData$hypertension, breaks= 2)
+```
+
+```{r}
+summary(hmoData$cost)
+```
+
+```{r}
+hist(hmoData$cost, breaks = 20) 
+```
+
+```{r}
+boxplot( hmoData$cost, hmoData = hmoData)
+```
+
+```{r}
+# Creating age categories for Visualizations:
+hmoDataAge_Category <- ""
+hmoData$Age_Category[hmoData$age < 21 & hmoData$age >= 0] <- "Young Adults"
+hmoData$Age_Category[hmoData$age >= 21 & hmoData$age < 36] <- "Adults"
+hmoData$Age_Category[hmoData$age >= 36 & hmoData$age < 51] <- "Middle Aged Adults"
+hmoData$Age_Category[hmoData$age >= 51] <- "Old Aged Adults"
+```
+
+```{r}
+# The following columns can be converted into categorical hmoData.
+unique(hmoData$smoker)
+hmoData$smoker <- ifelse(hmoData$smoker == "yes", 1, 0)
+class(hmoData$smoker)
+hmoData$smoker <- as.integer(hmoData$smoker)
 hmoData$smoker <- as.factor(hmoData$smoker)
+```
+
+```{r}
+unique(hmoData$location)
+hmoData$location <- as.factor(hmoData$location)
+```
+
+```{r}
+unique(hmoData$location_type)
+hmoData$location_type <- ifelse(hmoData$location_type == "Urban", 1, 0)
+class(hmoData$location_type)
+hmoData$location_type <- as.integer(hmoData$location_type)
 hmoData$location_type <- as.factor(hmoData$location_type)
+```
+
+```{r}
+unique(hmoData$education_level)
 hmoData$education_level <- as.factor(hmoData$education_level)
+```
+
+```{r}
+unique(hmoData$yearly_physical)
+hmoData$yearly_physical <- ifelse(hmoData$yearly_physical == "Yes", 1, 0)
+class(hmoData$yearly_physical)
+hmoData$yearly_physical <- as.integer(hmoData$yearly_physical)
 hmoData$yearly_physical <- as.factor(hmoData$yearly_physical)
+```
+
+```{r}
+unique(hmoData$exercise)
+hmoData$exercise <- ifelse(hmoData$exercise == "Active", 1, 0)
+class(hmoData$exercise)
+hmoData$exercise <- as.integer(hmoData$exercise)
 hmoData$exercise <- as.factor(hmoData$exercise)
+```
+
+```{r}
+unique(hmoData$married)
+hmoData$married <- ifelse(hmoData$married == "Married", 1, 0)
+class(hmoData$married)
+hmoData$married <- as.integer(hmoData$married)
 hmoData$married <- as.factor(hmoData$married)
+```
+
+```{r}
+unique(hmoData$gender)
+hmoData$gender <- ifelse(hmoData$gender == "male", 1, 0)
+class(hmoData$gender)
+hmoData$gender <- as.integer(hmoData$gender)
 hmoData$gender <- as.factor(hmoData$gender)
 ```
 
 ```{r Regression Model}
-lmOut <- lm(data = HMO_df2, cost ~ .)
+lmOut <- lm(data = hmoData, cost ~ .)
 summary(lmOut)
 ```
+
+```{r}
+testDF = subset(hmoData, select = -c(cost) )
+```
+
+```{r}
+# testDF <- na.omit(testDF)
+# kmOout <- kmeans(testDF, centers = 2)
+```
+
+```{r}
+#
+```
+
+
+
+
+
+
+
 
