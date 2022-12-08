@@ -7,9 +7,10 @@ output: html_document
 
 ```{r LoadingLibraries}
 if (!require("tidyverse")) install.packages("tidyverse")
+if (!require("ggplotly")) install.packages("plotly")
 if (!require("ggplot2")) install.packages("ggplot2")
 if (!require("treemapify")) install.packages("treemapify")
-listOfPackages <- c("tidyverse", "ggplot2", "treemapify", "hexbin", "RColorBrewer", "caret")
+listOfPackages <- c("tidyverse", "ggplot2", "treemapify", "hexbin", "RColorBrewer", "caret", "plotly")
 lapply(listOfPackages, require, character.only = TRUE)
 ```
 
@@ -42,7 +43,7 @@ colSums(is.na(hmoData))
 # we can see that we have 78 nulls in bmi and 80 nulls in hypertension.
 ```
 
-```{r}
+```{r Summary_hmoData$bmi}
 summary(hmoData$bmi)
 ```
 
@@ -136,6 +137,21 @@ hmoData %>% ggplot() +
   ggtitle("BMI vs Cost")
 ```
 
+```{r}
+hmoData %>% ggplot() +
+  geom_bin2d(mapping = aes(x = bmi, y = cost))
+
+# install.packages("hexbin")
+hmoData %>% ggplot() +
+  geom_hex(mapping = aes(x = bmi, y = cost))
+```
+
+```{r}
+hmoData %>% ggplot(aes(x = bmi, y = cost)) + 
+  geom_boxplot(mapping = aes(group = cut_width(bmi, 0.1)))
+```
+
+
 ```{r NumberOfChildren}
 hist(hmoData$children, breaks=5)
 ```
@@ -166,6 +182,7 @@ barplot(cost_smoker$Avg_Cost)
 summary(hmoData$cost[hmoData$smoker =="yes"])
 summary(hmoData$cost[hmoData$smoker =="no"])
 ```
+
 
 ```{r}
 summary(hmoData$cost[hmoData$location_type =="Urban"])
@@ -324,6 +341,28 @@ factorizing_data_for_model <- function(df){
 updatedHMOdata<-factorizing_data_for_model(updatedHMOdata)
 ```
 
+
+```{r}
+p <- updatedHMOdata %>%
+  # filter(location_typeIsUrban==1) %>%
+ggplot( aes(age, cost, color=bmi)) +
+  geom_point() +
+  theme_bw()
+# p <- p +  scale_shape_manual(values = c(0,23))
+ggplotly(p)
+
+```
+
+```{r}
+p <- updatedHMOdata %>%
+  # filter(location_typeIsUrban==1) %>%
+ggplot( aes(age, cost, color=isSmoker)) +
+  geom_point() +
+  theme_bw()
+p <- p +  scale_shape_manual(values = c(0,23))
+ggplotly(p)
+```
+
 ```{r CreateDataPartition}
 summary(updatedHMOdata$cost)
 str(updatedHMOdata)
@@ -343,6 +382,7 @@ save(lmOut, file ='../ist687_hmo/model_test')
 testDF<- data.frame(read_csv('../HMO_TEST_data_sample.csv'))
 testDF <- prepare_data_for_model(testDF)
 testDF <- factorizing_data_for_model(testDF)
+testDF
 ```
 
 ```{r}
@@ -365,16 +405,15 @@ quartiles
 ```
 
 ```{r}
-updatedHMOdata <- subset(updatedHMOdata, cost >= Lower & cost <= Upper)
+# updatedHMOdata <- subset(updatedHMOdata, cost >= Lower & cost <= Upper)
 ```
 
 ```{r}
-length(updatedHMOdata$bmi)
 median(updatedHMOdata$cost)
 ```
 
 ```{r}
-updatedHMOdata$expensive <- as.factor(ifelse(updatedHMOdata$cost>5000,'EXPENSIVE','NON-EXOENSIVE'))
+updatedHMOdata$expensive <- as.factor(ifelse(updatedHMOdata$cost>Upper,TRUE,FALSE))
 updatedHMOdata
 ```
 
@@ -390,6 +429,7 @@ svmLinear
 
 ```{r}
 #predict people for which healthcare would be expensive
+head(testData)
 predDF <- predict(svmLinear, newdata = testData)
 predDF
 ```
@@ -398,9 +438,26 @@ predDF
 #using confusion matrix to check performance of model
 confMatrix<-confusionMatrix(predDF, testData$expensive)
 plot(confMatrix$table, color = c("cyan", "blue"), conf.level = 0, margin = 1, main = "Confusion Matrix")
+confMatrix
 ```
 
 ```{r}
+testDF<- data.frame(read_csv('../HMO_TEST_data_sample.csv'))
+testDF <- prepare_data_for_model(testDF)
+testDF <- factorizing_data_for_model(testDF)
+testDF$cost <- costPrediction
+testDF_y<- data.frame(read_csv('../HMO_TEST_data_sample_solution.csv'))
+testDF_pred <- predict(svmLinear, newdata = testDF)
+confMatrix<-confusionMatrix(testDF_pred, as.factor(testDF_y$expensive))
+plot(confMatrix$table, color = c("cyan", "blue"), conf.level = 0, margin = 1, main = "Confusion Matrix")
+confMatrix
+
+```
+
+
+```{r}
+length(testDF_pred)
+length(testDF_y$expensive)
 # K-Means
 ```
 
@@ -430,6 +487,7 @@ str(HMO_x)
 
 ```{r}
 k <- 3
+dim(HMO_x)
 ```
 
 ```{r}
