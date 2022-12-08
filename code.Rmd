@@ -13,6 +13,14 @@ listOfPackages <- c("tidyverse", "ggplot2", "treemapify", "hexbin", "RColorBrewe
 lapply(listOfPackages, require, character.only = TRUE)
 ```
 
+```{r}
+# install.packages("ggfortify")
+library("ggplot2")
+library("dplyr")
+library("ggfortify")
+```
+
+
 ```{r ReadingData}
 df <- read_csv('https://intro-datascience.s3.us-east-2.amazonaws.com/HMO_data.csv')
 ```
@@ -206,10 +214,31 @@ boxplot( hmoData$cost, hmoData = hmoData)
 ```
 
 ```{r}
-ageCategoryCount <- data.frame((table(hmoData$Age_Category)))
-table(hmoData$Age_Category)
-unique(hmoData$Age_Category)
+mapDF <- hmoData %>% group_by(location) %>% summarise(mean(cost))
 ```
+
+```{r}
+us <- map_data("state")
+us$state_name <- tolower(us$region)
+coord <- data.frame(loc=tolower(mapDF$location),avg_cost=mapDF$`mean(cost)`)
+mergedDF <- merge(us,coord, by.x='state_name',by.y='loc')
+mergedDF <- mergedDF %>% arrange(order)
+
+```
+
+```{r}
+mergedDF %>% ggplot(aes(map_id= region)) + 
+  geom_polygon(color="black",aes(x=long,y=lat,group=group,fill=avg_cost))  +
+  expand_limits(x=mergedDF$long, y=mergedDF$lat)+
+  coord_map("mercator") +
+  ggtitle("Mean Cost for Each Location")
+```
+
+```{r}
+
+```
+
+
 
 ```{r Treemap}
 # library(treemapify)
@@ -245,32 +274,60 @@ prepare_data_for_model <- function(df){
            ,location_typeIsUrban = location_type)
   cat("\nAfter renaming : ",colnames(df))
   # df$isSmoker <- as.integer(df$isSmoker)
-  df$married <- as.factor(as.integer(ifelse(df$married == "Married", 1, 0)))
-  df$gender_isMale <- as.factor(as.integer(ifelse(df$gender_isMale == "male", 1, 0)))
-  df$exercise_isActive <- as.factor(as.integer(ifelse(df$exercise_isActive == "Active", 1, 0)))
-  df$education_level <- as.factor(df$education_level)
-  df$location_typeIsUrban <- as.factor(as.integer(ifelse(df$location_typeIsUrban == "Urban", 1, 0)))
+  df$married <- as.integer(ifelse(df$married == "Married", 1, 0))
+  df$gender_isMale <- as.integer(ifelse(df$gender_isMale == "male", 1, 0))
+  df$exercise_isActive <- as.integer(ifelse(df$exercise_isActive == "Active", 1, 0))
+  df$location_typeIsUrban <- as.integer(ifelse(df$location_typeIsUrban == "Urban", 1, 0))
+  df$isSmoker <- as.integer(ifelse(df$isSmoker == "yes", 1, 0))
+  df$yearly_physical <- as.integer(ifelse(df$yearly_physical == "Yes", 1, 0))
   df$Age_Category <- NA
-  mutate(df, Age_Category = ifelse(age %in% 0:21, "Young Adults"
+  df <- mutate(df, Age_Category = ifelse(age %in% 0:21, "Young Adults"
                                           ,ifelse(age %in% 21:36, "Adults"
                                           ,ifelse(age %in% 36:51, "Middle Aged Adults", "Old Aged Adults"))))
-
+  return(df)
 }
 ```
 
-
 ```{r}
 updatedHMOdata <- prepare_data_for_model(hmoData)
+updatedHMOdata
 ```
 
+
 ```{r}
-cor(updatedHMOdata[, unlist(lapply(updatedHMOdata, is.numeric))], use = "complete.obs")
+# ageCategoryCount <- data.frame((table(hmoData$Age_Category)))
+# table(hmoData$Age_Category)
+# unique(hmoData$Age_Category)
+```
+
+
+```{r}
+corr <- cor(updatedHMOdata[, unlist(lapply(updatedHMOdata, is.numeric))], use = "complete.obs")
+heatmap(corr, Colv = NA, Rowv = NA)
+```
+
+```{r DataPrepForModelTraining}
+factorizing_data_for_model <- function(df){
+  cat("Preparing dataframe for fitting the model....")
+  df$isSmoker<-as.factor(df$isSmoker)
+  df$location_typeIsUrban<-as.factor(df$location_typeIsUrban)
+  df$exercise_isActive<- as.factor(df$exercise_isActive)
+  df$married<-as.factor(df$married)
+  df$gender_isMale<-as.factor(df$gender_isMale)
+  df$yearly_physical<-as.factor(df$yearly_physical)
+  df$hypertension<-as.factor(df$hypertension)
+  return(df)
+}
+```
+
+```{r VariableFactorizatino}
+updatedHMOdata<-factorizing_data_for_model(updatedHMOdata)
 ```
 
 ```{r CreateDataPartition}
 summary(updatedHMOdata$cost)
+str(updatedHMOdata)
 ```
-
 
 ```{r Regression Model}
 lmOut <- lm(data = updatedHMOdata, cost ~ .)
@@ -283,8 +340,9 @@ save(lmOut, file ='../ist687_hmo/model_test')
 ```
 
 ```{r}
-testDF<- data.frame(read_csv('../../FInalProject/HMO_TEST_data_sample.csv'))
+testDF<- data.frame(read_csv('../HMO_TEST_data_sample.csv'))
 testDF <- prepare_data_for_model(testDF)
+testDF <- factorizing_data_for_model(testDF)
 ```
 
 ```{r}
@@ -293,5 +351,93 @@ cat(costPrediction)
 ```
 
 ```{r}
+# SVM
+```
 
+```{r}
+quartiles <- quantile(updatedHMOdata$cost, probs=c(.25,.75), na.rm = FALSE)
+IQR <- IQR(updatedHMOdata$cost)
+Lower <- quartiles[1] - 1.5*IQR
+Upper <- quartiles[2] + 1.5*IQR 
+Lower
+Upper
+quartiles
+```
+
+```{r}
+updatedHMOdata <- subset(updatedHMOdata, cost >= Lower & cost <= Upper)
+```
+
+```{r}
+length(updatedHMOdata$bmi)
+median(updatedHMOdata$cost)
+```
+
+```{r}
+updatedHMOdata$expensive <- as.factor(ifelse(updatedHMOdata$cost>5000,'EXPENSIVE','NON-EXOENSIVE'))
+updatedHMOdata
+```
+
+```{r}
+trainSet <- createDataPartition(y = updatedHMOdata$expensive , p= 0.7, list = FALSE)
+trainData <- updatedHMOdata[trainSet,]
+testData <- updatedHMOdata[-trainSet,]
+ctrl <- trainControl(method = "repeatedcv", number = 10, repeats = 3)
+svmLinear <- train(expensive~age+bmi+children+isSmoker+yearly_physical+exercise_isActive+hypertension+married, data = trainData, method = "svmLinear",
+                    trControl=ctrl, preProcess = c("center", "scale"), tuneLength = 10)
+svmLinear
+```
+
+```{r}
+#predict people for which healthcare would be expensive
+predDF <- predict(svmLinear, newdata = testData)
+predDF
+```
+
+```{r}
+#using confusion matrix to check performance of model
+confMatrix<-confusionMatrix(predDF, testData$expensive)
+plot(confMatrix$table, color = c("cyan", "blue"), conf.level = 0, margin = 1, main = "Confusion Matrix")
+```
+
+```{r}
+# K-Means
+```
+
+```{r}
+HMO_x <- updatedHMOdata[,names(updatedHMOdata) != "cost"]
+HMO_x <- HMO_x[,names(HMO_x) != "expensive"]
+HMO_x <- data.matrix(HMO_x)
+```
+
+```{r}
+elbowPoint <- function(data, nc=15, seed=1234){
+  data <- na.omit(data)
+  wss <- (nrow(data)-1)*sum(apply(data,2,var))
+  for (i in 2:nc){
+    set.seed(seed)
+    wss[i] <- sum(kmeans(data, centers=i)$withinss)}
+  plot(1:nc, wss, type="b", xlab="Number of Clusters",
+       ylab="Within groups sum of squares")
+  wss
+}
+```
+
+```{r}
+elbowPoint(HMO_x[!is.na(HMO_x)])
+str(HMO_x)
+```
+
+```{r}
+k <- 3
+```
+
+```{r}
+HMO_x <- na.omit(HMO_x)
+kmean <- kmeans(HMO_x[!is.na(HMO_x)],k)
+kmean$centers
+```
+
+```{r}
+autoplot(kmean, HMO_x, frame = TRUE)
 ```
