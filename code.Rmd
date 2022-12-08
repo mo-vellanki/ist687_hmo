@@ -5,83 +5,107 @@ date: "`r Sys.Date()`"
 output: html_document
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+```{r LoadingLibraries}
+if (!require("tidyverse")) install.packages("tidyverse")
+if (!require("ggplot2")) install.packages("ggplot2")
+if (!require("treemapify")) install.packages("treemapify")
+listOfPackages <- c("tidyverse", "ggplot2", "treemapify", "hexbin", "RColorBrewer", "caret")
+lapply(listOfPackages, require, character.only = TRUE)
 ```
 
-```{r Loading libraries, message=FALSE, warning=FALSE}
-library(tidyverse)
+```{r ReadingData}
+df <- read_csv('https://intro-datascience.s3.us-east-2.amazonaws.com/HMO_data.csv')
 ```
 
-```{r Reading data}
-hmoData <- read_csv('https://intro-datascience.s3.us-east-2.amazonaws.com/HMO_data.csv')
+```{r ColumnsInDataset}
+colnames(df)
 ```
-
 ```{r}
+hmoData <- select(df,-X) # X is a unique identifier for each row. We wouldn't need it in our analysis
+```
+
+```{r CheckingForNullValues}
 sum(is.na(hmoData)) # 158 null values
 ```
 
-```{r}
+```{r CheckingForNullValues2}
 # Checking each columns for number of nulls
 colSums(is.na(hmoData))
 # we can see that we have 78 nulls in bmi and 80 nulls in hypertension.
 ```
 
 ```{r}
+summary(hmoData$bmi)
+```
 
+```{r MissingValuesInterpolation-BMI}
+#There are null values in bmi and hypertension columns. These columns will be interpolated to fill the missing values.
+
+hmoData$bmi <- imputeTS::na_interpolation(hmoData$bmi)
+if(!sum(is.na(hmoData$bmi))) cat("BMI interpolated")
 ```
 
 ```{r}
+table(hmoData$hypertension)
+```
 
+```{r MissingValuesInterpolation-Hypertension}
+# Since we know that we have many missing values in BMI, lets clean them.
+hmoData$hypertension <- imputeTS::na_interpolation(hmoData$hypertension)
+if(!sum(is.na(hmoData$hypertension))) cat("Hypertension interpolated")
 ```
 
 ```{r}
-
+table(hmoData$hypertension)
 ```
 
 ```{r}
+hmoData$hypertension <- as.integer(hmoData$hypertension)
+hist(hmoData$hypertension, breaks= 2)
+```
+
+
+```{r AgeAnalysis}
 #Creating a histogram for the age
 hist(hmoData$age, breaks= 20)
 #we can observe that the hmoData is non-uniform as there are lot of people with age below 20.
 ```
 
-```{r}
+```{r AgeAnalysis2}
 # Checking for outliers for age
 boxplot(hmoData$age) # not clear outliers
 ```
 
 ```{r}
-# checking for a corelation b/w age and cost
-hmoData %>% ggplot() + 
-  aes(x=age, y=cost) + 
+violin_ageBmi <- ggplot(hmoData, aes(age,bmi))
+violin_ageBmi<-  violin_ageBmi + geom_violin() + labs(title="Age - BMI distribution",
+       subtitle="From the plot, we can see that BMI distribution is maximum around 30\nApproximamtely 42yo's have the least and highest BMI",
+       caption="HMO Data",
+       x="Age",
+       y="BMI")
+violin_ageBmi
+```
+
+```{r AgeAnalysisVScost}
+# checking for a correlation b/w age and cost
+hmoData %>% ggplot() +
+  aes(x=age, y=cost) +
   geom_point() +
-  geom_smooth(method="lm", se=FALSE) + 
+  geom_smooth(method="lm", se=FALSE) +
   ggtitle("Age vs Cost")
 ```
 
 
-
-```{r}
-# Since we know that we have many missing values in BMI, lets clean them.
-hmoData$bmi <- na_interpolation(hmoData$bmi)
-sum(is.na(hmoData$bmi))
-# now there are no missing values in BMI
-```
-
-```{r}
-hist(hmoData$bmi, breaks= 20)
-```
-
-```{r}
+```{r BMIAnalysis-Outliers}
 # checking for outliers
 boxplot(hmoData$bmi) # not clear outliers
 ```
 
-```{r}
+```{r ComputingQuartilesForIdentifyingOutliers}
 quartiles <- quantile(hmoData$bmi, probs=c(.25, .75), na.rm = FALSE)
 IQR <- IQR(hmoData$bmi)
 Lower <- quartiles[1] - 1.5*IQR
-Upper <- quartiles[2] + 1.5*IQR 
+Upper <- quartiles[2] + 1.5*IQR
 ```
 
 ```{r}
@@ -91,39 +115,46 @@ hmoData <- subset(hmoData, hmoData$bmi > Lower & hmoData$bmi <= Upper-1)
 ```{r}
 boxplot(hmoData$bmi) # not more outliers
 ```
+```{r BMIAnalysis}
+hist(hmoData$bmi, breaks= 20)
+```
 
-```{r}
+```{r CorrelationBMIvCost}
 # checking for a corelation b/w bmi and cost
-hmoData %>% ggplot() + 
-  aes(x=bmi, y=cost) + 
+hmoData %>% ggplot() +
+  aes(x=bmi, y=cost) +
   geom_point() +
-  geom_smooth(method="lm", se=FALSE) + 
+  geom_smooth(method="lm", se=FALSE) +
   ggtitle("BMI vs Cost")
 ```
 
-```{r}
+```{r NumberOfChildren}
 hist(hmoData$children, breaks=5)
 ```
 
-```{r}
-boxplot(hmoData$children) # not outliers
+```{r NumberOfChildren-Outliers}
+boxplot(hmoData$children) # no outliers
 ```
 
-```{r}
-# checking for a corelation b/w children and cost
-hmoData %>% ggplot() + 
-  aes(x=children, y=cost) + 
+```{r CorrelationNumberOfChildrenvsCost}
+# checking for a correlation b/w children and cost
+hmoData %>% ggplot() +
+  aes(x=children, y=cost) +
   geom_point() +
-  geom_smooth(method="lm", se=FALSE) + 
-  ggtitle("children vs Cost")
+  geom_smooth(method="lm", se=FALSE) +
+  ggtitle("Number of children vs Cost")
 ```
 
 ```{r}
 # The following columns can be converted into categorical hmoData.
 unique(hmoData$location)
+# cost_location <- hmoData %>% group_by(location) %>% summarise(Avg_Cost = mean(cost))
+# barplot(cost_location$Avg_Cost)
 ```
 
 ```{r}
+cost_smoker <- hmoData %>% group_by(smoker) %>% summarise(Avg_Cost = mean(cost))
+barplot(cost_smoker$Avg_Cost)
 summary(hmoData$cost[hmoData$smoker =="yes"])
 summary(hmoData$cost[hmoData$smoker =="no"])
 ```
@@ -153,16 +184,9 @@ summary(hmoData$cost[hmoData$gender =="male"])
 summary(hmoData$cost[hmoData$gender =="female"])
 ```
 
-```{r}
-hmoData$hypertension <- na_interpolation(hmoData$hypertension)
-```
+```{r HypertensionPieChart}
+pie(table(hmoData$hypertension), labels = c('Without Hypertension', 'With hypertension'))
 
-```{r}
-sum(is.na(hmoData$hypertension))
-```
-
-```{r}
-hist(hmoData$hypertension, breaks= 20)
 ```
 
 ```{r}
@@ -170,16 +194,11 @@ sum(hmoData$hypertension > 0 & hmoData$hypertension < 1)
 ```
 
 ```{r}
-hmoData$hypertension <- as.integer(hmoData$hypertension)
-hist(hmoData$hypertension, breaks= 2)
-```
-
-```{r}
 summary(hmoData$cost)
 ```
 
 ```{r}
-hist(hmoData$cost, breaks = 20) 
+hist(hmoData$cost, breaks = 20)
 ```
 
 ```{r}
@@ -187,95 +206,92 @@ boxplot( hmoData$cost, hmoData = hmoData)
 ```
 
 ```{r}
-# Creating age categories for Visualizations:
-hmoDataAge_Category <- ""
-hmoData$Age_Category[hmoData$age < 21 & hmoData$age >= 0] <- "Young Adults"
-hmoData$Age_Category[hmoData$age >= 21 & hmoData$age < 36] <- "Adults"
-hmoData$Age_Category[hmoData$age >= 36 & hmoData$age < 51] <- "Middle Aged Adults"
-hmoData$Age_Category[hmoData$age >= 51] <- "Old Aged Adults"
+ageCategoryCount <- data.frame((table(hmoData$Age_Category)))
+table(hmoData$Age_Category)
+unique(hmoData$Age_Category)
 ```
 
-```{r}
-# The following columns can be converted into categorical hmoData.
-unique(hmoData$smoker)
-hmoData$smoker <- ifelse(hmoData$smoker == "yes", 1, 0)
-class(hmoData$smoker)
-hmoData$smoker <- as.integer(hmoData$smoker)
-hmoData$smoker <- as.factor(hmoData$smoker)
+```{r Treemap}
+# library(treemapify)
+# ageCat_treemap <- ggplot(hmoData, aes(area = hmoData$age, fill = hmoData$cost))
+# ageCat_treemap <- ageCat_treemap + geom_treemap()
+# ageCat_treemap
 ```
+
+```{r Hexbin}
+
+# bin<-hexbin(hmoData$exercise, hmoData$cost)
+# my_colors=colorRampPalette(rev(brewer.pal(11,'Spectral')))
+# plot(bin, main="" , colramp=my_colors , legend=F )
+
+
+```
+
 
 ```{r}
 unique(hmoData$location)
 hmoData$location <- as.factor(hmoData$location)
 ```
 
+```{r DataPrepForModelTraining}
+prepare_data_for_model <- function(df){
+  cat("Preparing dataframe for fitting the model....")
+  cat("\nRenaming the columns. Current column names are : \n",colnames(df), "\n")
+  df<-
+    df %>%
+    rename(isSmoker = smoker
+           ,gender_isMale = gender
+           ,exercise_isActive = exercise
+           ,location_typeIsUrban = location_type)
+  cat("\nAfter renaming : ",colnames(df))
+  # df$isSmoker <- as.integer(df$isSmoker)
+  df$married <- as.factor(as.integer(ifelse(df$married == "Married", 1, 0)))
+  df$gender_isMale <- as.factor(as.integer(ifelse(df$gender_isMale == "male", 1, 0)))
+  df$exercise_isActive <- as.factor(as.integer(ifelse(df$exercise_isActive == "Active", 1, 0)))
+  df$education_level <- as.factor(df$education_level)
+  df$location_typeIsUrban <- as.factor(as.integer(ifelse(df$location_typeIsUrban == "Urban", 1, 0)))
+  df$Age_Category <- NA
+  mutate(df, Age_Category = ifelse(age %in% 0:21, "Young Adults"
+                                          ,ifelse(age %in% 21:36, "Adults"
+                                          ,ifelse(age %in% 36:51, "Middle Aged Adults", "Old Aged Adults"))))
+
+}
+```
+
+
 ```{r}
-unique(hmoData$location_type)
-hmoData$location_type <- ifelse(hmoData$location_type == "Urban", 1, 0)
-class(hmoData$location_type)
-hmoData$location_type <- as.integer(hmoData$location_type)
-hmoData$location_type <- as.factor(hmoData$location_type)
+updatedHMOdata <- prepare_data_for_model(hmoData)
 ```
 
 ```{r}
-unique(hmoData$education_level)
-hmoData$education_level <- as.factor(hmoData$education_level)
+cor(updatedHMOdata[, unlist(lapply(updatedHMOdata, is.numeric))], use = "complete.obs")
 ```
 
-```{r}
-unique(hmoData$yearly_physical)
-hmoData$yearly_physical <- ifelse(hmoData$yearly_physical == "Yes", 1, 0)
-class(hmoData$yearly_physical)
-hmoData$yearly_physical <- as.integer(hmoData$yearly_physical)
-hmoData$yearly_physical <- as.factor(hmoData$yearly_physical)
+```{r CreateDataPartition}
+summary(updatedHMOdata$cost)
 ```
 
-```{r}
-unique(hmoData$exercise)
-hmoData$exercise <- ifelse(hmoData$exercise == "Active", 1, 0)
-class(hmoData$exercise)
-hmoData$exercise <- as.integer(hmoData$exercise)
-hmoData$exercise <- as.factor(hmoData$exercise)
-```
-
-```{r}
-unique(hmoData$married)
-hmoData$married <- ifelse(hmoData$married == "Married", 1, 0)
-class(hmoData$married)
-hmoData$married <- as.integer(hmoData$married)
-hmoData$married <- as.factor(hmoData$married)
-```
-
-```{r}
-unique(hmoData$gender)
-hmoData$gender <- ifelse(hmoData$gender == "male", 1, 0)
-class(hmoData$gender)
-hmoData$gender <- as.integer(hmoData$gender)
-hmoData$gender <- as.factor(hmoData$gender)
-```
 
 ```{r Regression Model}
-lmOut <- lm(data = hmoData, cost ~ .)
+lmOut <- lm(data = updatedHMOdata, cost ~ .)
 summary(lmOut)
 ```
 
 ```{r}
-testDF = subset(hmoData, select = -c(cost) )
+save(lmOut, file ='../ist687_hmo/model_test')
+
 ```
 
 ```{r}
-# testDF <- na.omit(testDF)
-# kmOout <- kmeans(testDF, centers = 2)
+testDF<- data.frame(read_csv('../../FInalProject/HMO_TEST_data_sample.csv'))
+testDF <- prepare_data_for_model(testDF)
 ```
 
 ```{r}
-#
+costPrediction <- predict(lmOut,testDF)
+cat(costPrediction)
 ```
 
+```{r}
 
-
-
-
-
-
-
+```
