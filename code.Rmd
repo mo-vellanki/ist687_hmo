@@ -2,77 +2,69 @@
 title: "group1_HMO"
 author: "Mo"
 date: "`r Sys.Date()`"
-output: html_document
+output:
+  pdf_document: default
+  word_document: default
+  html_document: default
 ---
+# Loading Libraries
 
 ```{r LoadingLibraries}
 if (!require("tidyverse")) install.packages("tidyverse")
 if (!require("ggplotly")) install.packages("plotly")
 if (!require("ggplot2")) install.packages("ggplot2")
+if (!require("hrbrthemes")) install.packages("hrbrthemes")
+if (!require("viridis")) install.packages("viridis")
 if (!require("treemapify")) install.packages("treemapify")
-listOfPackages <- c("tidyverse", "ggplot2", "treemapify", "hexbin", "RColorBrewer", "caret", "plotly")
+listOfPackages <- c("tidyverse", "ggplot2", "treemapify", "hexbin", "RColorBrewer", "caret", "plotly","hrbrthemes","viridis")
 lapply(listOfPackages, require, character.only = TRUE)
 ```
-
-```{r}
-# install.packages("ggfortify")
-library("ggplot2")
-library("dplyr")
-library("ggfortify")
-```
-
+# Importing the Data
 
 ```{r ReadingData}
 df <- read_csv('https://intro-datascience.s3.us-east-2.amazonaws.com/HMO_data.csv')
 ```
+# Understanding the Data
 
 ```{r ColumnsInDataset}
 colnames(df)
+str(df)
 ```
+# Cleaning the Data
+
+*Descriptive Statistics aboutthe data*
 ```{r}
-hmoData <- select(df,-X) # X is a unique identifier for each row. We wouldn't need it in our analysis
+hmoData <- df
+summary(df)
 ```
 
+*Checking the how many null values we have in out data*
 ```{r CheckingForNullValues}
 sum(is.na(hmoData)) # 158 null values
-```
 
-```{r CheckingForNullValues2}
 # Checking each columns for number of nulls
 colSums(is.na(hmoData))
 # we can see that we have 78 nulls in bmi and 80 nulls in hypertension.
-```
 
-```{r Summary_hmoData$bmi}
 summary(hmoData$bmi)
 ```
 
+*Filling the missing values by interpolation*
 ```{r MissingValuesInterpolation-BMI}
 #There are null values in bmi and hypertension columns. These columns will be interpolated to fill the missing values.
-
 hmoData$bmi <- imputeTS::na_interpolation(hmoData$bmi)
 if(!sum(is.na(hmoData$bmi))) cat("BMI interpolated")
-```
 
-```{r}
-table(hmoData$hypertension)
-```
-
-```{r MissingValuesInterpolation-Hypertension}
 # Since we know that we have many missing values in BMI, lets clean them.
 hmoData$hypertension <- imputeTS::na_interpolation(hmoData$hypertension)
 if(!sum(is.na(hmoData$hypertension))) cat("Hypertension interpolated")
 ```
 
-```{r}
-table(hmoData$hypertension)
-```
-
+# Visualizing the columns for some EDA
 ```{r}
 hmoData$hypertension <- as.integer(hmoData$hypertension)
 hist(hmoData$hypertension, breaks= 2)
 ```
-
 
 ```{r AgeAnalysis}
 #Creating a histogram for the age
@@ -99,7 +91,7 @@ violin_ageBmi
 # checking for a correlation b/w age and cost
 hmoData %>% ggplot() +
   aes(x=age, y=cost) +
-  geom_point() +
+  geom_point(color= 'blue') +
   geom_smooth(method="lm", se=FALSE) +
   ggtitle("Age vs Cost")
 ```
@@ -110,14 +102,12 @@ hmoData %>% ggplot() +
 boxplot(hmoData$bmi) # not clear outliers
 ```
 
+*Removinfg Outliers*
 ```{r ComputingQuartilesForIdentifyingOutliers}
 quartiles <- quantile(hmoData$bmi, probs=c(.25, .75), na.rm = FALSE)
 IQR <- IQR(hmoData$bmi)
 Lower <- quartiles[1] - 1.5*IQR
 Upper <- quartiles[2] + 1.5*IQR
-```
-
-```{r}
 hmoData <- subset(hmoData, hmoData$bmi > Lower & hmoData$bmi <= Upper-1)
 ```
 
@@ -132,7 +122,7 @@ hist(hmoData$bmi, breaks= 20)
 # checking for a corelation b/w bmi and cost
 hmoData %>% ggplot() +
   aes(x=bmi, y=cost) +
-  geom_point() +
+  geom_point(color= 'red') +
   geom_smooth(method="lm", se=FALSE) +
   ggtitle("BMI vs Cost")
 ```
@@ -146,15 +136,19 @@ hmoData %>% ggplot() +
   geom_hex(mapping = aes(x = bmi, y = cost))
 ```
 
-```{r}
-hmoData %>% ggplot(aes(x = bmi, y = cost)) + 
-  geom_boxplot(mapping = aes(group = cut_width(bmi, 0.1)))
-```
-
 
 ```{r NumberOfChildren}
 hist(hmoData$children, breaks=5)
 ```
+
+*Summarizing the children column*
+```{r}
+aggr <- hmoData %>% group_by(children) %>% summarise(total_count=n(),
+                                                       .groups = 'drop') %>% as.data.frame()
+aggr$percent <- (aggr$total_count / nrow(hmoData)) * 100
+aggr
+```
+
 
 ```{r NumberOfChildren-Outliers}
 boxplot(hmoData$children) # no outliers
@@ -169,12 +163,16 @@ hmoData %>% ggplot() +
   ggtitle("Number of children vs Cost")
 ```
 
+*Analysing the locations*
+
 ```{r}
 # The following columns can be converted into categorical hmoData.
 unique(hmoData$location)
 # cost_location <- hmoData %>% group_by(location) %>% summarise(Avg_Cost = mean(cost))
 # barplot(cost_location$Avg_Cost)
 ```
+
+*Analysisng Smoker Trends*
 
 ```{r}
 cost_smoker <- hmoData %>% group_by(smoker) %>% summarise(Avg_Cost = mean(cost))
@@ -183,7 +181,99 @@ summary(hmoData$cost[hmoData$smoker =="yes"])
 summary(hmoData$cost[hmoData$smoker =="no"])
 ```
 
+```{r}
+hmoData %>%
+  ggplot( aes(x=smoker, y=cost, color=smoker)) +
+    scale_fill_viridis(discrete = TRUE, alpha=0.6) +
+    geom_jitter( size=0.4, alpha=0.9) +
+    theme_ipsum() +
+    theme(
+      legend.position="none",
+      plot.title = element_text(size=11)
+    )
+    xlab("Smoker Yes/No")
+```
 
+*Analysisng Gender Trends*
+```{r}
+cost_gender <- hmoData %>% group_by(gender) %>% summarise(Avg_Cost = mean(cost))
+barplot(cost_gender$Avg_Cost)
+summary(hmoData$cost[hmoData$gender =="male"])
+summary(hmoData$cost[hmoData$gender =="female"])
+```
+
+```{r}
+hmoData %>%
+  ggplot( aes(x=gender, y=cost, color=gender)) +
+    scale_fill_viridis(discrete = TRUE, alpha=0.6) +
+    geom_jitter( size=0.4, alpha=0.9) +
+    theme_ipsum() +
+    theme(
+      legend.position="none",
+      plot.title = element_text(size=11)
+    )
+    xlab("Gender Male/Female")
+```
+
+
+```{r HypertensionPieChart}
+pie(table(hmoData$hypertension), labels = c('Without Hypertension', 'With hypertension'))
+
+```
+
+```{r}
+aggr <- hmoData %>% group_by(hypertension) %>% summarise(total_count=n(),
+                                                       .groups = 'drop') %>% as.data.frame()
+aggr$percent <- (aggr$total_count / nrow(hmoData)) * 100
+aggr
+```
+
+```{r}
+sum(hmoData$hypertension > 0 & hmoData$hypertension < 1)
+```
+
+*Cost Analysis*
+
+```{r}
+summary(hmoData$cost)
+```
+
+```{r}
+hist(hmoData$cost, breaks = 20)
+```
+
+```{r}
+boxplot( hmoData$cost, hmoData = hmoData)
+```
+
+*Creating Map based on average cost for each location*
+```{r}
+mapDF <- hmoData %>% group_by(location) %>% summarise(mean(cost))
+```
+
+```{r}
+us <- map_data("state")
+us$state_name <- tolower(us$region)
+coord <- data.frame(loc=tolower(mapDF$location),avg_cost=mapDF$`mean(cost)`)
+mergedDF <- merge(us,coord, by.x='state_name',by.y='loc')
+mergedDF <- mergedDF %>% arrange(order)
+
+```
+
+```{r}
+
+```
+
+
+```{r}
+mergedDF %>% ggplot(aes(map_id= region)) + 
+  geom_polygon(color="black",aes(x=long,y=lat, group=group, fill=avg_cost))  +
+  expand_limits(x=mergedDF$long, y=mergedDF$lat) +
+  coord_map("mercator") +
+  ggtitle("Mean Cost for Each Location")
+```
+
+*Descriptive Statistics of all columns*
 ```{r}
 summary(hmoData$cost[hmoData$location_type =="Urban"])
 summary(hmoData$cost[hmoData$location_type =="Country"])
@@ -209,50 +299,22 @@ summary(hmoData$cost[hmoData$gender =="male"])
 summary(hmoData$cost[hmoData$gender =="female"])
 ```
 
-```{r HypertensionPieChart}
-pie(table(hmoData$hypertension), labels = c('Without Hypertension', 'With hypertension'))
-
-```
 
 ```{r}
-sum(hmoData$hypertension > 0 & hmoData$hypertension < 1)
+# cbind(states, st_coordinates(st_centroid(states)))
+# mergedDF %>% ggplot() +
+#     geom_sf() +
+#     geom_sf(data = states, fill = NA) + 
+#     geom_text(data = states, aes(X, Y, label = ID), size = 5) +
+#     coord_sf(xlim = c(-88, -78), ylim = c(24.5, 33), expand = FALSE)
 ```
 
-```{r}
-summary(hmoData$cost)
-```
 
 ```{r}
-hist(hmoData$cost, breaks = 20)
-```
-
-```{r}
-boxplot( hmoData$cost, hmoData = hmoData)
-```
-
-```{r}
-mapDF <- hmoData %>% group_by(location) %>% summarise(mean(cost))
-```
-
-```{r}
-us <- map_data("state")
-us$state_name <- tolower(us$region)
-coord <- data.frame(loc=tolower(mapDF$location),avg_cost=mapDF$`mean(cost)`)
-mergedDF <- merge(us,coord, by.x='state_name',by.y='loc')
-mergedDF <- mergedDF %>% arrange(order)
-
-```
-
-```{r}
-mergedDF %>% ggplot(aes(map_id= region)) + 
-  geom_polygon(color="black",aes(x=long,y=lat,group=group,fill=avg_cost))  +
-  expand_limits(x=mergedDF$long, y=mergedDF$lat)+
-  coord_map("mercator") +
-  ggtitle("Mean Cost for Each Location")
-```
-
-```{r}
-
+# ggplot(hmoData, aes(x=cost,fill=as.factor(gender))) + 
+#   geom_density(hmoData$y=age, alpha=0.25) +
+#   labs(title  = "Distribution of FWB Score for Men and Women in the CFPB Financial Well-being Survey 2016 Data",fill = "Group")+
+#   scale_fill_discrete(labels = c("Male", "Female"))
 ```
 
 
@@ -279,10 +341,43 @@ unique(hmoData$location)
 hmoData$location <- as.factor(hmoData$location)
 ```
 
+```{r}
+p <- hmoData %>%
+  # filter(location_typeIsUrban==1) %>%
+ggplot( aes(age, cost, color=bmi)) +
+  geom_point() +
+  theme_bw()
+# p <- p +  scale_shape_manual(values = c(0,23))
+ggplotly(p)
+
+```
+
+```{r}
+p <- hmoData %>%
+  # filter(location_typeIsUrban==1) %>%
+ggplot( aes(age, cost, color=smoker)) +
+  geom_point() +
+  theme_bw()
+p <- p +  scale_shape_manual(values = c(0,23))
+ggplotly(p)
+```
+
+```{r}
+p <- hmoData %>%
+  # filter(location_typeIsUrban==1) %>%
+ggplot( aes(age, cost, color=gender)) +
+  geom_point() +
+  theme_bw()
+p <- p +  scale_shape_manual(values = c(0,23))
+ggplotly(p)
+```
+
+#Data Preperation for Modeling
 ```{r DataPrepForModelTraining}
 prepare_data_for_model <- function(df){
   cat("Preparing dataframe for fitting the model....")
   cat("\nRenaming the columns. Current column names are : \n",colnames(df), "\n")
+  df <- df[,names(df)!='X']
   df<-
     df %>%
     rename(isSmoker = smoker
@@ -301,6 +396,19 @@ prepare_data_for_model <- function(df){
   df <- mutate(df, Age_Category = ifelse(age %in% 0:21, "Young Adults"
                                           ,ifelse(age %in% 21:36, "Adults"
                                           ,ifelse(age %in% 36:51, "Middle Aged Adults", "Old Aged Adults"))))
+  df$location <-  as.integer(ifelse(df$location == 'CONNECTICUT', 0,
+                                ifelse(df$location == 'RHODE ISLAND', 1,
+                                ifelse(df$location == 'MASSACHUSETTS', 2,
+                                ifelse(df$location == 'PENNSYLVANIA', 3,
+                                ifelse(df$location == 'MARYLAND', 4,
+                                ifelse(df$location == 'NEW JERSEY', 5,
+                                ifelse(df$location == 'NEW YORK', 6, 'NA'
+                                       ))))))))
+
+  df$education_level <-  as.integer(ifelse(df$education_level == 'Bachelor', 0,
+                                ifelse(df$education_level == 'Master', 1,
+                                ifelse(df$education_level == 'PhD', 2,
+                                ifelse(df$education_level == 'No College Degree', 3, 'NA')))))
   return(df)
 }
 ```
@@ -309,14 +417,6 @@ prepare_data_for_model <- function(df){
 updatedHMOdata <- prepare_data_for_model(hmoData)
 updatedHMOdata
 ```
-
-
-```{r}
-# ageCategoryCount <- data.frame((table(hmoData$Age_Category)))
-# table(hmoData$Age_Category)
-# unique(hmoData$Age_Category)
-```
-
 
 ```{r}
 corr <- cor(updatedHMOdata[, unlist(lapply(updatedHMOdata, is.numeric))], use = "complete.obs")
@@ -333,6 +433,9 @@ factorizing_data_for_model <- function(df){
   df$gender_isMale<-as.factor(df$gender_isMale)
   df$yearly_physical<-as.factor(df$yearly_physical)
   df$hypertension<-as.factor(df$hypertension)
+  df$education_level <- as.factor(df$education_level)
+  df$Age_Category <- as.factor(df$Age_Category)
+  df$location <- as.factor(df$location)
   return(df)
 }
 ```
@@ -341,54 +444,34 @@ factorizing_data_for_model <- function(df){
 updatedHMOdata<-factorizing_data_for_model(updatedHMOdata)
 ```
 
-
-```{r}
-p <- updatedHMOdata %>%
-  # filter(location_typeIsUrban==1) %>%
-ggplot( aes(age, cost, color=bmi)) +
-  geom_point() +
-  theme_bw()
-# p <- p +  scale_shape_manual(values = c(0,23))
-ggplotly(p)
-
-```
-
-```{r}
-p <- updatedHMOdata %>%
-  # filter(location_typeIsUrban==1) %>%
-ggplot( aes(age, cost, color=isSmoker)) +
-  geom_point() +
-  theme_bw()
-p <- p +  scale_shape_manual(values = c(0,23))
-ggplotly(p)
-```
-
 ```{r CreateDataPartition}
 summary(updatedHMOdata$cost)
 str(updatedHMOdata)
 ```
 
 ```{r Regression Model}
-lmOut <- lm(data = updatedHMOdata, cost ~ .)
+lmOut <- lm(data = updatedHMOdata, cost ~ age + bmi + children + isSmoker + exercise_isActive + hypertension)
 summary(lmOut)
 ```
 
 ```{r}
-save(lmOut, file ='../ist687_hmo/model_test')
-
+save(lmOut, file ='../ist687_hmo/lm_model_test')
 ```
 
 ```{r}
-testDF<- data.frame(read_csv('../HMO_TEST_data_sample.csv'))
-testDF <- prepare_data_for_model(testDF)
-testDF <- factorizing_data_for_model(testDF)
-testDF
+test_file_DF<- data.frame(read_csv('../HMO_TEST_data_sample.csv'))
+test_file_DF <- prepare_data_for_model(test_file_DF)
+test_file_DF <- factorizing_data_for_model(test_file_DF)
+test_file_DF
 ```
 
 ```{r}
-costPrediction <- predict(lmOut,testDF)
+costPrediction <- predict(lmOut,test_file_DF)
 cat(costPrediction)
 ```
+
+
+
 
 ```{r}
 # SVM
@@ -405,33 +488,57 @@ quartiles
 ```
 
 ```{r}
-# updatedHMOdata <- subset(updatedHMOdata, cost >= Lower & cost <= Upper)
-```
-
-```{r}
-median(updatedHMOdata$cost)
-```
-
-```{r}
-updatedHMOdata$expensive <- as.factor(ifelse(updatedHMOdata$cost>Upper,TRUE,FALSE))
+updatedHMOdata$expensive <- as.factor(ifelse(updatedHMOdata$cost>quartiles[2],TRUE,FALSE))
 updatedHMOdata
 ```
 
+#Visualizations With Expensive
+
 ```{r}
-trainSet <- createDataPartition(y = updatedHMOdata$expensive , p= 0.7, list = FALSE)
+df_age <- updatedHMOdata %>%
+  group_by(age, expensive, cost)
+
+plot_e1 <- ggplot(data = df_age, aes(x = age,y = cost, fill = expensive)) + 
+  geom_bar(stat='identity') + scale_fill_brewer(palette = 14)
+plot_e1 <- plot_e1 + labs(title = 'Expensive by Age', x = 'Ages')
+plot_e1
+```
+
+```{r}
+plot_e2 <- ggplot(data = updatedHMOdata, aes(x = isSmoker, fill = expensive)) + 
+  geom_bar() + scale_fill_brewer(palette = 14)
+plot_e2 <- plot_e2 + labs(title = 'smoker Vs Non-smoker', x = 'Activity')
+plot_e2
+```
+
+```{r}
+
+```
+
+
+```{r}
+set.seed(1234)
+trainSet <- createDataPartition(y = updatedHMOdata$expensive , p= 0.8, list = FALSE)
 trainData <- updatedHMOdata[trainSet,]
 testData <- updatedHMOdata[-trainSet,]
-ctrl <- trainControl(method = "repeatedcv", number = 10, repeats = 3)
-svmLinear <- train(expensive~age+bmi+children+isSmoker+yearly_physical+exercise_isActive+hypertension+married, data = trainData, method = "svmLinear",
-                    trControl=ctrl, preProcess = c("center", "scale"), tuneLength = 10)
-svmLinear
+svmModel <- ksvm(expensive ~ age + bmi + children + isSmoker + location + location_typeIsUrban +
+                   education_level + yearly_physical + exercise_isActive + married + hypertension + gender_isMale, 
+                 data = trainSet, C = 5, cross =3, prob.model =TRUE)
+
+
+predOut <- predict(svmModel, newdata = testSet, type = "response")
+predOut
+
+confusionMatrix(predOut, testSet$expensive)
+```
+
+```{r}
+# save svm
 ```
 
 ```{r}
 #predict people for which healthcare would be expensive
-head(testData)
 predDF <- predict(svmLinear, newdata = testData)
-predDF
 ```
 
 ```{r}
@@ -442,13 +549,11 @@ confMatrix
 ```
 
 ```{r}
-testDF<- data.frame(read_csv('../HMO_TEST_data_sample.csv'))
-testDF <- prepare_data_for_model(testDF)
-testDF <- factorizing_data_for_model(testDF)
+testDF <- test_file_DF
 testDF$cost <- costPrediction
-testDF_y<- data.frame(read_csv('../HMO_TEST_data_sample_solution.csv'))
+test_file_DF_y<- data.frame(read_csv('../HMO_TEST_data_sample_solution.csv'))
 testDF_pred <- predict(svmLinear, newdata = testDF)
-confMatrix<-confusionMatrix(testDF_pred, as.factor(testDF_y$expensive))
+confMatrix<-confusionMatrix(testDF_pred, as.factor(test_file_DF_y$expensive))
 plot(confMatrix$table, color = c("cyan", "blue"), conf.level = 0, margin = 1, main = "Confusion Matrix")
 confMatrix
 
@@ -457,45 +562,259 @@ confMatrix
 
 ```{r}
 length(testDF_pred)
-length(testDF_y$expensive)
-# K-Means
+length(test_file_DF_y$expensive)
+```
+
+```{r K-Means}
+# HMO_x <- updatedHMOdata[,names(updatedHMOdata) != "cost"]
+# HMO_x <- HMO_x[,names(HMO_x) != "expensive"]
+# HMO_x <- data.matrix(HMO_x)
+# 
+# # install.packages("factoextra")
+# library(factoextra)
+# 
+# # dim(HMO_x, FUNcluster = NULL)
+# fviz_nbclust(HMO_x, kmeans, method = "wss")
+# geom_vline(xintercept = 2, linetype = 2)
+# 
+# # Average silhouette for kmeans
+# fviz_nbclust(HMO_x, kmeans, method = "silhouette")
+# 
+# k <- 2
+# HMO_x <- na.omit(HMO_x)
+# kmean <- kmeans(HMO_x[!is.na(HMO_x)],k)
+# kmean$centers
+# 
+# fviz_cluster(kmean, data = HMO_x,
+#              palette = c("#2E9FDF", "#00AFBB", "#E7B800"), 
+#              geom = "point",
+#              ellipse.type = "convex", 
+#              ggtheme = theme_bw()
+#              )
+```
+
+
+```{r Alookr All models together}
+# library(alookr)
+# 
+# # split the data into a train set and a test set by default arguments
+# sb <- updatedHMOdata %>%
+#   split_by(target = expensive)
+# 
+# # show the class name
+# class(sb)
+# 
+# nolevel_in_train <- sb %>%
+#   compare_target_category() %>% 
+#   filter(is.na(train)) %>% 
+#   select(variable) %>% 
+#   unique() %>% 
+#   pull
+# 
+# nolevel_in_train
+# 
+# while (length(nolevel_in_train) > 0) {
+#   sb <- breastCancer %>%
+#     split_by(Class)
+# 
+#   nolevel_in_train <- sb %>%
+#     compare_target_category() %>% 
+#     filter(is.na(train)) %>% 
+#     select(variable) %>% 
+#     unique() %>% 
+#     pull
+# }
+# 
+# table(sb$expensive)
+# 
+# prop.table(table(sb$expensive))
+# 
+# summary(sb)
+# 
+# # resampling 
+# # OVERSAMPLING
+# # to balanced by over sampling
+# train_over <- sb %>%
+#   sampling_target(method = "ubOver")
+# 
+# # frequency table 
+# table(train_over$expensive)
+# 
+# # UNDERSAMPLING
+# # to balanced by under sampling
+# train_under <- sb %>%
+#   sampling_target(method = "ubUnder")
+# 
+# # frequency table 
+# table(train_under$expensive)
+# 
+# train_smote <- sb %>%
+#   sampling_target(seed = 1234L, method = "ubSMOTE")
+# 
+# # frequency table 
+# table(train_smote$expensive)
+# 
+# train <- train_smote %>% cleanse
+# table(train$expensive)
+# 
+# test <- sb %>% extract_set(set = "test")
+# test
+# 
+# result <- train %>% 
+#   run_models(target = "expensive", positive = FALSE)
+# result
+# 
+# pred <- result %>%
+#   run_predict(test)
+# pred
+# 
+# perf <- run_performance(pred)
+# perf
+# 
+# performance <- perf$performance
+# names(performance) <- perf$model_id
+# performance
+# 
+# length(test$expensive)
+# nrow(test1)
 ```
 
 ```{r}
-HMO_x <- updatedHMOdata[,names(updatedHMOdata) != "cost"]
-HMO_x <- HMO_x[,names(HMO_x) != "expensive"]
-HMO_x <- data.matrix(HMO_x)
+train <- trainData
+test <- testData
+```
+
+
+```{r INDIE}
+library(e1071) 
+library(caret)
+svmmodel <- svm(expensive~.,data = train)
+summary(svmmodel)
+svmpredict <- predict(svmmodel, newdata = test[,names(test)!='expensive'], type = "response" )
+confusionMatrix(svmpredict,test$expensive)
+
 ```
 
 ```{r}
-elbowPoint <- function(data, nc=15, seed=1234){
-  data <- na.omit(data)
-  wss <- (nrow(data)-1)*sum(apply(data,2,var))
-  for (i in 2:nc){
-    set.seed(seed)
-    wss[i] <- sum(kmeans(data, centers=i)$withinss)}
-  plot(1:nc, wss, type="b", xlab="Number of Clusters",
-       ylab="Within groups sum of squares")
-  wss
-}
+#SVM for age,bmi,smoker and exercise as Indpt
+print("SVM For age, BMI , Children, Smoker, Yearly Physical, Excercise,Hypertension,Married")
+svmmodel2<- svm(expensive~Age_Category+bmi+children+isSmoker+yearly_physical+exercise_isActive+hypertension+married,data = train)
+svmpredict2 <- predict(svmmodel2, newdata = test[,names(test)!='expensive'], type = "response" )
+confusionMatrix(svmpredict2,test$expensive)
+
 ```
 
 ```{r}
-elbowPoint(HMO_x[!is.na(HMO_x)])
-str(HMO_x)
+
+print("SVM without married variable")
+svmmodel5<- svm(expensive~Age_Category+bmi+children+isSmoker+exercise_isActive,data = train)
+svmpredict5 <- predict(svmmodel5, newdata = test[,names(test)!='expensive'], type = "response" )
+confusionMatrix(svmpredict5,test$expensive)
+
 ```
 
 ```{r}
-k <- 3
-dim(HMO_x)
+# svmpredict5 <- predict(svmmodel5, newdata = test[,names(test)!='expensive'], type = "response" )
+# confusionMatrix(svmpredict5,test$expensive)
+testDF
+```
+
+
+```{r}
+#Decision Tree:
+#install.packages("caret") 
+library(e1071)
+library(caret)
+library(rpart)
+library(rpart.plot)
+trctrl<- trainControl(method="repeatedcv",number=50)
+tree_df <- rpart(expensive ~.,data = train[,names(train)!='cost'], method='class')
+rpart.plot(tree_df)
+summary(tree_df)
+head(train[,names(train)!='cost'])
 ```
 
 ```{r}
-HMO_x <- na.omit(HMO_x)
-kmean <- kmeans(HMO_x[!is.na(HMO_x)],k)
-kmean$centers
+#Random Forest:
+
+#install.packages("randomForest")
+library(randomForest)
+library(datasets)
+library(caret)
+rf <- randomForest(expensive~., data=train[,names(train)!='cost'], proximity=TRUE)
+
+p1 <- predict(rf, test[,names(test)!='cost'])
+confusionMatrix(p1, test$ expensive)
+
 ```
 
 ```{r}
-autoplot(kmean, HMO_x, frame = TRUE)
+testDF_DT <- testDF[,names(testDF)!= 'age']
+testDF_DT <- testDF_DT[,names(testDF_DT)!= 'cost']
+testDF_DT <- testDF_DT[,names(testDF_DT)!= 'X']
+testDF_DT$location <- as.factor(testDF_DT$location)
+p1 <- predict(rf, testDF_DT)
+confusionMatrix(p1, testDF_y)
 ```
+
+```{r}
+testDF_DT[,names(testDF_DT)!= 'cost']
+train[,names(train)!='cost']
+```
+
+
+#Apriori
+```{r}
+library(arules)
+library(arulesViz)
+#df <- matrix(df4)
+
+df_new <- data.frame(ageGroup=updatedHMOdata$Age_Category,
+                     children=updatedHMOdata$children,
+                     smoker=updatedHMOdata$isSmoker,
+                     location=updatedHMOdata$location,
+                     location_type=updatedHMOdata$location_typeIsUrban,
+                     education_level=updatedHMOdata$education_level,
+                     yearly_physical = updatedHMOdata$yearly_physical,
+                     exercise = updatedHMOdata$exercise_isActive,
+                     married =updatedHMOdata$married,
+                     hypertension =updatedHMOdata$hypertension,
+                     gender=updatedHMOdata$gender_isMale,
+                     expensive =updatedHMOdata$expensive)
+
+df_newer <- as(df_new, 'transactions')
+
+datarules <- apriori(df_newer,
+ parameter=list(supp=0.10, conf=0.5),
+ control=list(verbose=F),
+ appearance=list(default="lhs",rhs=("expensive=TRUE")))
+#inspect rules
+library(arulesViz)
+inspect(datarules)
+inspectDT(datarules)
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+
+
+
+
