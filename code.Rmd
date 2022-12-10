@@ -15,8 +15,13 @@ if (!require("ggplotly")) install.packages("plotly")
 if (!require("ggplot2")) install.packages("ggplot2")
 if (!require("hrbrthemes")) install.packages("hrbrthemes")
 if (!require("viridis")) install.packages("viridis")
+if (!require("kernlab")) install.packages("kernlab")
+if (!require("rpart")) install.packages("rpart")
+if (!require("rpart.plot")) install.packages("rpart.plot")
 if (!require("treemapify")) install.packages("treemapify")
-listOfPackages <- c("tidyverse", "ggplot2", "treemapify", "hexbin", "RColorBrewer", "caret", "plotly","hrbrthemes","viridis")
+if (!require("caret")) install.packages("caret")
+if (!require("randomForest")) install.packages("randomForest")
+listOfPackages <- c("tidyverse", "ggplot2", "treemapify", "hexbin", "RColorBrewer", "caret", "plotly","hrbrthemes","viridis","kernlab","rpart","rpart.plot","caret","randomForest")
 lapply(listOfPackages, require, character.only = TRUE)
 ```
 # Importing the Data
@@ -342,34 +347,34 @@ hmoData$location <- as.factor(hmoData$location)
 ```
 
 ```{r}
-p <- hmoData %>%
+hmoData %>%
   # filter(location_typeIsUrban==1) %>%
 ggplot( aes(age, cost, color=bmi)) +
   geom_point() +
   theme_bw()
 # p <- p +  scale_shape_manual(values = c(0,23))
-ggplotly(p)
+# ggplotly(p)
 
 ```
 
 ```{r}
-p <- hmoData %>%
+hmoData %>%
   # filter(location_typeIsUrban==1) %>%
 ggplot( aes(age, cost, color=smoker)) +
   geom_point() +
   theme_bw()
-p <- p +  scale_shape_manual(values = c(0,23))
-ggplotly(p)
+# p <- p +  scale_shape_manual(values = c(0,23))
+# ggplotly(p)
 ```
 
 ```{r}
-p <- hmoData %>%
+hmoData %>%
   # filter(location_typeIsUrban==1) %>%
 ggplot( aes(age, cost, color=gender)) +
   geom_point() +
   theme_bw()
-p <- p +  scale_shape_manual(values = c(0,23))
-ggplotly(p)
+# p <- p +  scale_shape_manual(values = c(0,23))
+# ggplotly(p)
 ```
 
 #Data Preperation for Modeling
@@ -449,38 +454,7 @@ summary(updatedHMOdata$cost)
 str(updatedHMOdata)
 ```
 
-```{r Regression Model}
-# lmOut <- lm(data = updatedHMOdata, cost ~ age + bmi + children + isSmoker + exercise_isActive + hypertension)
-# summary(lmOut)
-n <- 16
-head(hmoData,n)
-```
-
-```{r}
-# save(lmOut, file ='../ist687_hmo/lm_model_test')
-# saveRDS(lmOut, "../ist687_hmo/lm_model_test.rds")/
-my_model <- readRDS("lm_model_test.rds")
-```
-
-```{r}
-test_file_DF<- data.frame(read_csv('../HMO_TEST_data_sample.csv'))
-test_file_DF <- prepare_data_for_model(test_file_DF)
-test_file_DF <- factorizing_data_for_model(test_file_DF)
-test_file_DF
-```
-
-```{r}
-costPrediction <- predict(my_model,test_file_DF)
-cat(costPrediction)
-```
-
-
-
-
-```{r}
-# SVM
-```
-
+#Assuming Expensice Criteria
 ```{r}
 quartiles <- quantile(updatedHMOdata$cost, probs=c(.25,.75), na.rm = FALSE)
 IQR <- IQR(updatedHMOdata$cost)
@@ -515,23 +489,48 @@ plot_e2 <- plot_e2 + labs(title = 'smoker Vs Non-smoker', x = 'Activity')
 plot_e2
 ```
 
-```{r}
 
+
+```{r Regression Model}
+# lmOut <- lm(data = updatedHMOdata, cost ~ age + bmi + children + isSmoker + exercise_isActive + hypertension)
+# summary(lmOut)
 ```
 
+```{r}
+# save(lmOut, file ='../ist687_hmo/lm_model_test')
+saveRDS(lmOut, "../ist687_hmo/lm_model.rds")
+my_lm_model <- readRDS("../ist687_hmo/lm_model.rds")
+```
+
+```{r}
+test_file_DF<- data.frame(read_csv('../HMO_TEST_data_sample.csv'))
+test_file_DF <- prepare_data_for_model(test_file_DF)
+test_file_DF <- factorizing_data_for_model(test_file_DF)
+test_file_DF
+
+test_file_DF_y<- data.frame(read_csv('../HMO_TEST_data_sample_solution.csv'))
+```
+
+```{r}
+costPrediction <- predict(my_lm_model,test_file_DF)
+cat(costPrediction)
+```
+
+```{r}
+# SVM
+```
 
 ```{r}
 set.seed(1234)
 trainSet <- createDataPartition(y = updatedHMOdata$expensive , p= 0.8, list = FALSE)
 trainData <- updatedHMOdata[trainSet,]
 testData <- updatedHMOdata[-trainSet,]
-svmModel <- ksvm(expensive ~ age + bmi + children + isSmoker + location + location_typeIsUrban +
-                   education_level + yearly_physical + exercise_isActive + married + hypertension + gender_isMale, 
+svmModel <- ksvm(expensive ~ age + bmi + children + isSmoker +  exercise_isActive + hypertension,
                  data = trainData, C = 5, cross =3, prob.model =TRUE)
 ```
 
 ```{r}
-test <- testData[,names(testData)!= "expensive"]
+test <- testData
 predOut <- predict(svmModel, newdata = test, type = "response")
 # predOut
 
@@ -540,238 +539,92 @@ confusionMatrix(predOut, testData$expensive)
 
 ```{r}
 # save svm
-str(test)
-str(temp_data)
+saveRDS(svmModel, "../ist687_hmo/svm_model.rds")
+my_svm_model <- readRDS("../ist687_hmo/svm_model.rds")
 ```
 
 ```{r}
 #predict people for which healthcare would be expensive
 temp_data <- test_file_DF
 temp_data$cost <- costPrediction
-predDF <- predict(svmModel, newdata = temp_data)
+predDF <- predict(my_svm_model, newdata = temp_data)
+predDF
 ```
 
 ```{r}
 #using confusion matrix to check performance of model
-confMatrix<-confusionMatrix(predDF, testData$expensive)
+test_file_DF_y$expensive
+confMatrix<-confusionMatrix(predDF, as.factor(test_file_DF_y$expensive))
 plot(confMatrix$table, color = c("cyan", "blue"), conf.level = 0, margin = 1, main = "Confusion Matrix")
 confMatrix
 ```
 
-```{r}
-testDF <- test_file_DF
-testDF$cost <- costPrediction
-test_file_DF_y<- data.frame(read_csv('../HMO_TEST_data_sample_solution.csv'))
-testDF_pred <- predict(svmLinear, newdata = testDF)
-confMatrix<-confusionMatrix(testDF_pred, as.factor(test_file_DF_y$expensive))
-plot(confMatrix$table, color = c("cyan", "blue"), conf.level = 0, margin = 1, main = "Confusion Matrix")
-confMatrix
-
-```
-
-
-```{r}
-length(testDF_pred)
-length(test_file_DF_y$expensive)
-```
-
-```{r K-Means}
-# HMO_x <- updatedHMOdata[,names(updatedHMOdata) != "cost"]
-# HMO_x <- HMO_x[,names(HMO_x) != "expensive"]
-# HMO_x <- data.matrix(HMO_x)
-# 
-# # install.packages("factoextra")
-# library(factoextra)
-# 
-# # dim(HMO_x, FUNcluster = NULL)
-# fviz_nbclust(HMO_x, kmeans, method = "wss")
-# geom_vline(xintercept = 2, linetype = 2)
-# 
-# # Average silhouette for kmeans
-# fviz_nbclust(HMO_x, kmeans, method = "silhouette")
-# 
-# k <- 2
-# HMO_x <- na.omit(HMO_x)
-# kmean <- kmeans(HMO_x[!is.na(HMO_x)],k)
-# kmean$centers
-# 
-# fviz_cluster(kmean, data = HMO_x,
-#              palette = c("#2E9FDF", "#00AFBB", "#E7B800"), 
-#              geom = "point",
-#              ellipse.type = "convex", 
-#              ggtheme = theme_bw()
-#              )
-```
-
-
-```{r Alookr All models together}
-# library(alookr)
-# 
-# # split the data into a train set and a test set by default arguments
-# sb <- updatedHMOdata %>%
-#   split_by(target = expensive)
-# 
-# # show the class name
-# class(sb)
-# 
-# nolevel_in_train <- sb %>%
-#   compare_target_category() %>% 
-#   filter(is.na(train)) %>% 
-#   select(variable) %>% 
-#   unique() %>% 
-#   pull
-# 
-# nolevel_in_train
-# 
-# while (length(nolevel_in_train) > 0) {
-#   sb <- breastCancer %>%
-#     split_by(Class)
-# 
-#   nolevel_in_train <- sb %>%
-#     compare_target_category() %>% 
-#     filter(is.na(train)) %>% 
-#     select(variable) %>% 
-#     unique() %>% 
-#     pull
-# }
-# 
-# table(sb$expensive)
-# 
-# prop.table(table(sb$expensive))
-# 
-# summary(sb)
-# 
-# # resampling 
-# # OVERSAMPLING
-# # to balanced by over sampling
-# train_over <- sb %>%
-#   sampling_target(method = "ubOver")
-# 
-# # frequency table 
-# table(train_over$expensive)
-# 
-# # UNDERSAMPLING
-# # to balanced by under sampling
-# train_under <- sb %>%
-#   sampling_target(method = "ubUnder")
-# 
-# # frequency table 
-# table(train_under$expensive)
-# 
-# train_smote <- sb %>%
-#   sampling_target(seed = 1234L, method = "ubSMOTE")
-# 
-# # frequency table 
-# table(train_smote$expensive)
-# 
-# train <- train_smote %>% cleanse
-# table(train$expensive)
-# 
-# test <- sb %>% extract_set(set = "test")
-# test
-# 
-# result <- train %>% 
-#   run_models(target = "expensive", positive = FALSE)
-# result
-# 
-# pred <- result %>%
-#   run_predict(test)
-# pred
-# 
-# perf <- run_performance(pred)
-# perf
-# 
-# performance <- perf$performance
-# names(performance) <- perf$model_id
-# performance
-# 
-# length(test$expensive)
-# nrow(test1)
-```
-
-```{r}
-train <- trainData
-test <- testData
-```
-
-
-```{r INDIE}
-library(e1071) 
-library(caret)
-svmmodel <- svm(expensive~.,data = train)
-summary(svmmodel)
-svmpredict <- predict(svmmodel, newdata = test[,names(test)!='expensive'], type = "response" )
-confusionMatrix(svmpredict,test$expensive)
-
-```
-
-```{r}
-#SVM for age,bmi,smoker and exercise as Indpt
-print("SVM For age, BMI , Children, Smoker, Yearly Physical, Excercise,Hypertension,Married")
-svmmodel2<- svm(expensive~Age_Category+bmi+children+isSmoker+yearly_physical+exercise_isActive+hypertension+married,data = train)
-svmpredict2 <- predict(svmmodel2, newdata = test[,names(test)!='expensive'], type = "response" )
-confusionMatrix(svmpredict2,test$expensive)
-
-```
-
-```{r}
-
-print("SVM without married variable")
-svmmodel5<- svm(expensive~Age_Category+bmi+children+isSmoker+exercise_isActive,data = train)
-svmpredict5 <- predict(svmmodel5, newdata = test[,names(test)!='expensive'], type = "response" )
-confusionMatrix(svmpredict5,test$expensive)
-
-```
-
-```{r}
-# svmpredict5 <- predict(svmmodel5, newdata = test[,names(test)!='expensive'], type = "response" )
-# confusionMatrix(svmpredict5,test$expensive)
-testDF
-```
-
-
+#RPART
 ```{r}
 #Decision Tree:
 #install.packages("caret") 
 library(e1071)
-library(caret)
-library(rpart)
-library(rpart.plot)
+```
+
+```{r}
+tree_train_set <- data.frame(
+                     children=trainData$children,
+                     isSmoker=trainData$isSmoker,
+                     exercise_isActive = trainData$exercise_isActive,
+                     hypertension =trainData$hypertension,
+                     bmi = trainData$bmi,
+                     age = trainData$age,
+                     expensive =trainData$expensive)
+
+tree_test_set <- data.frame(
+                     children=testData$children,
+                     isSmoker=testData$isSmoker,
+                     exercise_isActive = testData$exercise_isActive,
+                     hypertension =testData$hypertension,
+                     bmi = testData$bmi,
+                     age = testData$age,
+                     expensive =testData$expensive)
+```
+
+
+```{r}
 trctrl<- trainControl(method="repeatedcv",number=50)
-tree_df <- rpart(expensive ~.,data = train[,names(train)!='cost'], method='class')
+tree_df <- rpart(expensive ~.,data = tree_train_set, method='class')
 rpart.plot(tree_df)
 summary(tree_df)
-head(train[,names(train)!='cost'])
+# head(tree_train_set)
 ```
 
 ```{r}
 #Random Forest:
 
 #install.packages("randomForest")
-library(randomForest)
-library(datasets)
-library(caret)
-rf <- randomForest(expensive~., data=train[,names(train)!='cost'], proximity=TRUE)
+# library(randomForest)
+# library(datasets)
+rf <- randomForest(expensive~., data=tree_train_set, proximity=TRUE)
 
-p1 <- predict(rf, test[,names(test)!='cost'])
+p1 <- predict(rf, tree_test_set)
 confusionMatrix(p1, test$ expensive)
 
 ```
 
 ```{r}
-testDF_DT <- testDF[,names(testDF)!= 'age']
-testDF_DT <- testDF_DT[,names(testDF_DT)!= 'cost']
-testDF_DT <- testDF_DT[,names(testDF_DT)!= 'X']
-testDF_DT$location <- as.factor(testDF_DT$location)
-p1 <- predict(rf, testDF_DT)
-confusionMatrix(p1, testDF_y)
+# SAVE RF Model
+saveRDS(rf, "../ist687_hmo/rf_model.rds")
+my_rf_model <- readRDS("../ist687_hmo/rf_model.rds")
 ```
+
 
 ```{r}
-testDF_DT[,names(testDF_DT)!= 'cost']
-train[,names(train)!='cost']
+# testDF_DT <- testDF[,names(testDF)!= 'age']
+# testDF_DT <- testDF_DT[,names(testDF_DT)!= 'cost']
+# testDF_DT <- testDF_DT[,names(testDF_DT)!= 'X']
+# testDF_DT$location <- as.factor(testDF_DT$location)
+p1 <- predict(my_rf_model, test_file_DF)
+rf_cm <- confusionMatrix(p1, as.factor(test_file_DF_y$expensive))
+rf_cm
+plot(rf_cm$table, color = c("cyan", "blue"), conf.level = 0, margin = 1, main = "Confusion Matrix")
 ```
-
 
 #Apriori
 ```{r}
