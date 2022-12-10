@@ -450,12 +450,16 @@ str(updatedHMOdata)
 ```
 
 ```{r Regression Model}
-lmOut <- lm(data = updatedHMOdata, cost ~ age + bmi + children + isSmoker + exercise_isActive + hypertension)
-summary(lmOut)
+# lmOut <- lm(data = updatedHMOdata, cost ~ age + bmi + children + isSmoker + exercise_isActive + hypertension)
+# summary(lmOut)
+n <- 16
+head(hmoData,n)
 ```
 
 ```{r}
-save(lmOut, file ='../ist687_hmo/lm_model_test')
+# save(lmOut, file ='../ist687_hmo/lm_model_test')
+# saveRDS(lmOut, "../ist687_hmo/lm_model_test.rds")/
+my_model <- readRDS("lm_model_test.rds")
 ```
 
 ```{r}
@@ -466,7 +470,7 @@ test_file_DF
 ```
 
 ```{r}
-costPrediction <- predict(lmOut,test_file_DF)
+costPrediction <- predict(my_model,test_file_DF)
 cat(costPrediction)
 ```
 
@@ -523,22 +527,28 @@ trainData <- updatedHMOdata[trainSet,]
 testData <- updatedHMOdata[-trainSet,]
 svmModel <- ksvm(expensive ~ age + bmi + children + isSmoker + location + location_typeIsUrban +
                    education_level + yearly_physical + exercise_isActive + married + hypertension + gender_isMale, 
-                 data = trainSet, C = 5, cross =3, prob.model =TRUE)
+                 data = trainData, C = 5, cross =3, prob.model =TRUE)
+```
 
+```{r}
+test <- testData[,names(testData)!= "expensive"]
+predOut <- predict(svmModel, newdata = test, type = "response")
+# predOut
 
-predOut <- predict(svmModel, newdata = testSet, type = "response")
-predOut
-
-confusionMatrix(predOut, testSet$expensive)
+confusionMatrix(predOut, testData$expensive)
 ```
 
 ```{r}
 # save svm
+str(test)
+str(temp_data)
 ```
 
 ```{r}
 #predict people for which healthcare would be expensive
-predDF <- predict(svmLinear, newdata = testData)
+temp_data <- test_file_DF
+temp_data$cost <- costPrediction
+predDF <- predict(svmModel, newdata = temp_data)
 ```
 
 ```{r}
@@ -788,10 +798,23 @@ datarules <- apriori(df_newer,
  parameter=list(supp=0.10, conf=0.5),
  control=list(verbose=F),
  appearance=list(default="lhs",rhs=("expensive=TRUE")))
+
+```
+
+```{r}
 #inspect rules
 library(arulesViz)
 inspect(datarules)
 inspectDT(datarules)
+
+# datarules2 <- apriori(df_newer,
+#  parameter=list(supp=0.10, conf=0.5),
+#  control=list(verbose=F),
+#  appearance=list(default="lhs",rhs=("expensive=FALSE")))
+# 
+# 
+# inspect(datarules2)
+# inspectDT(datarules2)
 ```
 
 ```{r}
